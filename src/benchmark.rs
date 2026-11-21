@@ -121,8 +121,8 @@ fn worker() {
         return;
     }
     let mut pages = vec![0u8; MEMORY_BYTES];
-    for (index, page) in pages.chunks_exact_mut(PAGE_BYTES).enumerate() {
-        page[0] = black_box(index as u8);
+    for (index, byte) in pages.iter_mut().step_by(PAGE_BYTES).enumerate() {
+        *byte = black_box(index as u8);
     }
     let mut input = String::new();
     println!("FIXTURE_READY");
@@ -134,8 +134,9 @@ fn worker() {
 
     let start = Instant::now();
     let checksum = pages
-        .chunks_exact(PAGE_BYTES)
-        .fold(0u64, |sum, page| sum + u64::from(black_box(page[0])));
+        .iter()
+        .step_by(PAGE_BYTES)
+        .fold(0u64, |sum, byte| sum + u64::from(black_box(*byte)));
     let elapsed = start.elapsed();
     assert!(checksum > 0);
     println!("FIXTURE_US {}", elapsed.as_micros());
