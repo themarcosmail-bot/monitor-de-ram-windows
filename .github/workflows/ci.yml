@@ -2,14 +2,22 @@ name: Testes do Windows
 
 on:
   push:
+    branches: [main]
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
   test:
-    runs-on: windows-latest
+    name: Testes e medição A/B (${{ matrix.windows }})
+    runs-on: ${{ matrix.windows }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        windows: [windows-2022, windows-2025]
     steps:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
         with:
@@ -18,3 +26,20 @@ jobs:
       - run: cargo +stable fmt --all -- --check
       - run: cargo +stable clippy --locked --all-targets -- -D warnings
       - run: cargo +stable test --locked
+      - name: Medir a retomada com e sem limpeza
+        run: |
+          $output = cargo +stable test --locked --release --bin monitor-de-ram benchmark::resume_after_trim -- --ignored --nocapture
+          $output
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $result = $output | Select-String '\bRAM_AB passive_mib=(\d+) passive_us=(\d+) trimmed_mib=(\d+) trimmed_us=(\d+)$'
+          if (-not $result) { throw 'Medição A/B não encontrada.' }
+          $sample = $result.Matches[0].Groups
+          @"
+          ### Memória residente e retomada
+          Medianas de cinco execuções por modo, com um processo sintético de 128 MiB.
+
+          | Modo | Redução residente (MiB) | Retomada (µs) |
+          | --- | ---: | ---: |
+          | Monitoramento | $($sample[1].Value) | $($sample[2].Value) |
+          | Com limpeza | $($sample[3].Value) | $($sample[4].Value) |
+          "@ | Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY

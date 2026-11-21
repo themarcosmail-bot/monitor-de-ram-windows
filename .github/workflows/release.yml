@@ -1,0 +1,77 @@
+name: Prévia do instalador
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    runs-on: windows-2025
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          persist-credentials: false
+      - name: Preparar Rust
+        run: |
+          rustup toolchain install 1.100.0 --profile minimal
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Compilar e validar o MSI
+        id: package
+        env:
+          RUSTUP_TOOLCHAIN: 1.100.0-x86_64-pc-windows-msvc
+        run: |
+          $versionLine = Select-String -LiteralPath Cargo.toml -Pattern '^version\s*=\s*"(\d+\.\d+\.\d+)"$'
+          $version = $versionLine.Matches[0].Groups[1].Value
+          if ($env:GITHUB_REF_NAME -ne "v$version") { throw 'A tag difere da versão do aplicativo.' }
+          $wixBin = @(
+            (Join-Path "${env:ProgramFiles(x86)}" 'WiX Toolset v3.14\bin'),
+            $(if ($env:WIX) { Join-Path $env:WIX 'bin' })
+          ) | Where-Object { $_ -and (Test-Path -LiteralPath (Join-Path $_ 'candle.exe')) } | Select-Object -First 1
+          if (-not $wixBin) { throw 'WiX Toolset 3.14 indisponível no executor.' }
+          cargo test --locked
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          .\build-msi.ps1 -WixBin $wixBin
+
+          $msi = "dist/Monitor-de-RAM-$version-x64.msi"
+          $app = Get-Item -LiteralPath 'target\x86_64-pc-windows-msvc\release\monitor-de-ram.exe'
+          if ($app.VersionInfo.ProductName -ne 'Monitor de RAM' -or $app.VersionInfo.ProductVersion -ne $version) {
+            throw 'Os metadados do executável não correspondem ao produto e à versão.'
+          }
+          $package = (Resolve-Path -LiteralPath $msi).Path
+          $image = Join-Path $env:RUNNER_TEMP 'monitor-ram-msi-image'
+          $parameters = @('/a', ('"{0}"' -f $package), '/qn', ('TARGETDIR="{0}"' -f $image))
+          $extract = Start-Process -FilePath msiexec.exe -ArgumentList $parameters -WindowStyle Hidden -Wait -PassThru
+          if ($extract.ExitCode -ne 0) { throw "Falha ao extrair o MSI ($($extract.ExitCode))." }
+          $payload = @(Get-ChildItem -LiteralPath $image -Recurse -File -Filter 'Monitor de RAM.exe')
+          if ($payload.Count -ne 1 -or (Get-FileHash -LiteralPath $app.FullName).Hash -ne (Get-FileHash -LiteralPath $payload[0].FullName).Hash) {
+            throw 'O executável extraído difere do executável compilado.'
+          }
+          "msi=$msi" | Add-Content -LiteralPath $env:GITHUB_OUTPUT
+      - name: Atestar a origem do MSI
+        uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4.1.0
+        with:
+          subject-path: ${{ steps.package.outputs.msi }}
+      - name: Verificar a atestação e publicar a prévia
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PACKAGE_FILE: ${{ steps.package.outputs.msi }}
+        run: |
+          for ($try = 0; $try -lt 3; $try++) {
+            gh attestation verify $env:PACKAGE_FILE --repo $env:GITHUB_REPOSITORY --signer-workflow "$env:GITHUB_REPOSITORY/.github/workflows/release.yml" --deny-self-hosted-runners
+            if ($LASTEXITCODE -eq 0) { break }
+            if ($try -eq 2) { throw 'A atestação de procedência não pôde ser verificada.' }
+            Start-Sleep -Seconds 5
+          }
+          $notes = Join-Path $env:RUNNER_TEMP 'monitor-ram-release-notes.md'
+          (Get-Content -LiteralPath '.github/release-notes.md' -Raw).Replace('MONITOR_MSI', (Split-Path -Leaf $env:PACKAGE_FILE)) |
+            Set-Content -LiteralPath $notes -Encoding utf8
+          gh release create $env:GITHUB_REF_NAME $env:PACKAGE_FILE "$env:PACKAGE_FILE.sha256" --repo $env:GITHUB_REPOSITORY --verify-tag --prerelease --title "Monitor de RAM $env:GITHUB_REF_NAME" --notes-file $notes
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

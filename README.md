@@ -20,11 +20,22 @@ A operação usa `EmptyWorkingSet` do Windows. Ela retira páginas residentes do
 
 O app funciona localmente, sem acesso à rede. O arquivo `%LOCALAPPDATA%\Monitor de RAM\config.txt` registra o intervalo, o limite e os caminhos dos executáveis autorizados. Esse arquivo pode ser removido separadamente após a desinstalação. O app é executado com as permissões do usuário e usa interfaces documentadas do Windows.
 
-O MSI inicial traz o crédito de autoria e um SHA-256 publicado na release. Ele ainda não possui assinatura Authenticode. O SHA-256 verifica a integridade do arquivo. Para distribuição mais ampla, uma próxima etapa é assinar o EXE e o MSI com um certificado de assinatura de código confiável e carimbo de tempo. [Opções de assinatura da Microsoft](https://learn.microsoft.com/windows/apps/package-and-deploy/code-signing-options)
+Para desinstalar o programa, use **Configurações → Aplicativos → Aplicativos instalados → Monitor de RAM → Desinstalar**.
+
+## Code signing policy
+
+A partir da versão 1.0.1, o GitHub Actions compila o MSI a partir da tag da release e registra uma atestação de procedência. O SHA-256 verifica os bytes do arquivo. A atestação registra qual repositório e fluxo produziram o MSI. As prévias estão sem assinatura Windows Authenticode. [Atestações do GitHub](https://docs.github.com/en/actions/concepts/security/artifact-attestations)
 
 ```powershell
-Get-FileHash .\Monitor-de-RAM-1.0.0-x64.msi -Algorithm SHA256
+Get-FileHash .\Monitor-de-RAM-1.0.1-x64.msi -Algorithm SHA256
+gh attestation verify .\Monitor-de-RAM-1.0.1-x64.msi --repo themarcosmail-bot/monitor-de-ram-windows --signer-workflow themarcosmail-bot/monitor-de-ram-windows/.github/workflows/release.yml --deny-self-hosted-runners
 ```
+
+O mantenedor do repositório revisa contribuições e publica as tags de lançamento. Para o Authenticode gratuito, o projeto pode solicitar avaliação à SignPath Foundation, que define a elegibilidade e exige aprovação manual para a assinatura de cada release. [Condições da SignPath Foundation](https://signpath.org/terms)
+
+## Teste de desempenho
+
+O GitHub Actions executa testes em VMs de Windows Server 2022 e 2025. Um teste A/B compara cinco execuções por modo em processos de laboratório de 128 MiB. Ele mede a redução da memória residente e o tempo para reler as páginas ao retomar. Veja o resumo em [Actions](https://github.com/themarcosmail-bot/monitor-de-ram-windows/actions/workflows/ci.yml). A carga sintética mede o custo de retomar páginas e não representa a fluidez de aplicativos em uso diário.
 
 ## Compilar e empacotar
 
