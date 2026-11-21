@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+  <Product Id="*" Name="Monitor de RAM" Language="1046" Codepage="1252" Version="$(var.AppVersion)"
+           Manufacturer="themarcosmail-bot" UpgradeCode="A613F794-409E-4A6E-9ED4-40FF2433A38B">
+    <Package InstallerVersion="500" Compressed="yes" InstallScope="perUser" Platform="x64" />
+    <MajorUpgrade DowngradeErrorMessage="Já existe uma versão mais recente do Monitor de RAM." />
+    <MediaTemplate EmbedCab="yes" />
+    <Property Id="ARPURLINFOABOUT" Value="https://github.com/themarcosmail-bot/monitor-de-ram-windows" />
+    <Condition Message="O Monitor de RAM requer Windows de 64 bits.">Installed OR VersionNT64</Condition>
+
+    <Directory Id="TARGETDIR" Name="SourceDir">
+      <Directory Id="LocalAppDataFolder">
+        <Directory Id="UserProgramsFolder" Name="Programs">
+          <Directory Id="AppFolder" Name="Monitor de RAM">
+            <Component Id="AppFiles" Guid="20AE2E12-D86C-44F2-A358-8377C1F3BD5D" Win64="yes">
+              <File Id="MonitorExe" Source="$(var.AppExe)" Name="Monitor de RAM.exe">
+                <Shortcut Id="StartMenuShortcut" Directory="AppMenuFolder" Name="Monitor de RAM"
+                          Advertise="no" WorkingDirectory="AppFolder" />
+              </File>
+              <File Id="LicenseFile" Source="LICENSE" Name="LICENSE.txt" />
+              <File Id="ThirdPartyNotices" Source="THIRD-PARTY.txt" />
+              <File Id="RustNotices" Source="$(var.RustNotices)" Name="RUST-COPYRIGHT.html" />
+              <RemoveFolder Id="RemoveAppFolder" On="uninstall" />
+              <RemoveFolder Id="RemoveUserProgramsFolder" Directory="UserProgramsFolder" On="uninstall" />
+              <RemoveFolder Id="RemoveAppMenuFolder" Directory="AppMenuFolder" On="uninstall" />
+              <RegistryValue Root="HKCU" Key="Software\Monitor de RAM" Name="Installed"
+                             Type="integer" Value="1" KeyPath="yes" />
+            </Component>
+          </Directory>
+        </Directory>
+      </Directory>
+      <Directory Id="ProgramMenuFolder">
+        <Directory Id="AppMenuFolder" Name="Monitor de RAM" />
+      </Directory>
+    </Directory>
+    <Feature Id="Main" Title="Monitor de RAM" Level="1">
+      <ComponentRef Id="AppFiles" />
+    </Feature>
+  </Product>
+</Wix>

@@ -1,0 +1,28 @@
+[package]
+name = "monitor-de-ram"
+version = "1.0.0"
+edition = "2024"
+description = "Monitor de RAM com limpeza seletiva para Windows"
+authors = ["@themarcosmail-bot"]
+license = "MIT"
+repository = "https://github.com/themarcosmail-bot/monitor-de-ram-windows"
+
+[dependencies]
+windows-sys = { version = "=0.61.2", features = [
+    "Win32_Foundation",
+    "Win32_Graphics_Gdi",
+    "Win32_Security",
+    "Win32_System_Diagnostics_ToolHelp",
+    "Win32_System_LibraryLoader",
+    "Win32_System_ProcessStatus",
+    "Win32_System_RemoteDesktop",
+    "Win32_System_SystemInformation",
+    "Win32_System_Threading",
+    "Win32_UI_Controls",
+    "Win32_UI_WindowsAndMessaging",
+] }
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true
